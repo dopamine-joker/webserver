@@ -166,7 +166,7 @@ void Utils::sig_handler(int sig) {
 
 //设置信号函数
 void Utils::addsig(int sig, void(handler)(int), bool restart) {
-    struct sigaction sa;
+    struct sigaction sa{};
     memset(&sa, '\0', sizeof(sa));
     sa.sa_handler = handler;
     if (restart)
@@ -177,7 +177,8 @@ void Utils::addsig(int sig, void(handler)(int), bool restart) {
 
 //定时处理任务，重新定时以不断触发SIGALRM信号
 void Utils::timer_handler() {
-    m_timer_lst.tick();
+    m_time_wheel.tick();
+//    m_timer_lst.tick();
     alarm(m_TIMESLOT);            //设置下一次的SIGALRM信号
 }
 
@@ -191,7 +192,7 @@ int Utils::u_epollfd = 0;
 
 class Utils;
 
-void cb_func(client_data *user_data) {
+void cb_func(_client_data *user_data) {
     epoll_ctl(Utils::u_epollfd, EPOLL_CTL_DEL, user_data->sockfd, 0);
     assert(user_data);
     close(user_data->sockfd);
