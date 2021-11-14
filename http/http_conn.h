@@ -95,8 +95,8 @@ public:
     }
 	//同步线程初始化数据库读取表
     void initmysql_result(connection_pool *connPool);
-    int timer_flag;
-    int improv;
+    int timer_flag; //reactor中使用，用来判断子线程是否读写完成
+    int improv; //fd中是否有读数据可以处理，或fd中是否有写过数据
 
 
 private:
@@ -150,9 +150,9 @@ private:
 	//m_read_buf中已经解析的字符个数
     int m_start_line;
 	
-	//存储发出的响应报文数据
+	//存储response line + response header
     char m_write_buf[WRITE_BUFFER_SIZE];
-	//指示buffer中的长度
+	//指示response line + response header中的长度
     int m_write_idx;
 	
 	//主状态机的状态
@@ -167,13 +167,13 @@ private:
     char *m_version;
     char *m_host;
     int m_content_length;
-    bool m_linger;
+    bool m_linger;              //是否HTTP长连接
 	
     char *m_file_address;		//读取服务器上的文件地址
     struct stat m_file_stat;
-    struct iovec m_iv[2];		//io向量机制iovec
-    int m_iv_count;
-    int cgi;        			//是否启用的POST
+    struct iovec m_iv[2];		//io向量机制iovec, 第一个存放http的响应行，header,第二个存放body内容
+    int m_iv_count;             //iovec的个数
+    int cgi;        			//是否是POST,是POST启动cgi
     char *m_string; 			//存储请求头数据
     int bytes_to_send;			//剩余发送字节数
     int bytes_have_send;		//已发送字节数

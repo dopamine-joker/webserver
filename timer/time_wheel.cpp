@@ -4,7 +4,7 @@
 
 #include "time_wheel.h"
 
-tw_timer::tw_timer(int rot, int ts) : prev(nullptr), next(nullptr), rotation(rot), time_slot(ts) {}
+tw_timer::tw_timer(int _timeout) : prev(nullptr), next(nullptr), timeout(_timeout) {}
 
 time_wheel::time_wheel() : cur_slot(0) {
     for (auto &slot: slots) {

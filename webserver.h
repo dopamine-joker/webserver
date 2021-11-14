@@ -14,10 +14,12 @@
 
 #include "./threadpool/threadpool.h"
 #include "./http/http_conn.h"
+#include "./misc/type.h"
 
 const int MAX_FD = 65536;           //最大文件描述符
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
 const int TIMESLOT = 5;             //最小超时单位
+const int ALARMTIME = 1;            //时间轮一秒转一次
 
 class WebServer
 {
@@ -36,8 +38,8 @@ public:
     void eventListen();
     void eventLoop();
     void timer(int connfd, struct sockaddr_in client_address);
-    void adjust_timer(util_timer *timer);
-    void deal_timer(util_timer *timer, int sockfd);
+    void adjust_timer(tw_timer *timer);
+    void deal_timer(tw_timer *timer, int sockfd);
     bool dealclinetdata();
     bool dealwithsignal(bool& timeout, bool& stop_server);
     void dealwithread(int sockfd);
@@ -70,13 +72,14 @@ public:
     epoll_event events[MAX_EVENT_NUMBER];
 
     int m_listenfd;
-    int m_OPT_LINGER;
-    int m_TRIGMode;
-    int m_LISTENTrigmode;
-    int m_CONNTrigmode;
+    int m_OPT_LINGER;       //优雅关闭连接
+    int m_TRIGMode;         //server 启动传参制定的ET,LT模式
+    int m_LISTENTrigmode;   //listen ET还是LT
+    int m_CONNTrigmode;     //处理的fd ET还是LT
 
     //定时器相关
-    client_data *users_timer;
+//    client_data *users_timer;
+    _client_data *users_timer;
     Utils utils;
 };
 #endif

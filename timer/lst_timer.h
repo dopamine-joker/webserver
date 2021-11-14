@@ -23,6 +23,7 @@
 
 #include <time.h>
 #include "../log/log.h"
+#include "time_wheel.h"
 
 class util_timer;
 
@@ -96,11 +97,13 @@ public:
 public:
     static int *u_pipefd;            //信号管道
     sort_timer_lst m_timer_lst;
+    time_wheel m_time_wheel;
+
     static int u_epollfd;
     int m_TIMESLOT;
 };
 
 //回调函数
-void cb_func(client_data *user_data);
+void cb_func(_client_data *user_data);
 
 #endif

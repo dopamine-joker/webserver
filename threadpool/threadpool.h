@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include "../lock/locker.h"
 #include "../CGImysql/sql_connection_pool.h"
+#include "../misc/type.h"
 
 template<typename T>
 class threadpool {
@@ -24,7 +25,7 @@ private:
     /*工作线程运行的函数，它不断从工作队列中取出任务并执行之*/
     static void *worker(void *arg);
 
-    void run();
+    [[noreturn]] void run();
 
 private:
     int m_thread_number;        //线程池中的线程数
@@ -78,7 +79,6 @@ bool threadpool<T>::append(T *request, int state) {
     return true;
 }
 
-
 template<typename T>
 bool threadpool<T>::append_p(T *request) {
     m_queuelocker.lock();
@@ -100,7 +100,7 @@ void *threadpool<T>::worker(void *arg) {
 }
 
 template<typename T>
-void threadpool<T>::run() {
+[[noreturn]] void threadpool<T>::run() {
     while (true) {
         m_queuestat.wait();
         m_queuelocker.lock();
@@ -113,30 +113,29 @@ void threadpool<T>::run() {
         m_queuelocker.unlock();
         if (!request)
             continue;
-        if (1 == m_actor_model)        //reactor,子线程负责读写
-        {
-            if (0 == request->m_state)    //如果是读事件
-            {
+        if (ACTOR_MODEL::REACTOR == m_actor_model) {       //reactor,子线程负责读写
+
+            if (FD_STATUS::SERVER_READ == request->m_state) {  //如果是读事件
+                // reactor模式，read_once读取fd数据在子线程完成
                 if (request->read_once()) {
-                    request->improv = 1;
+                    request->improv = 1;    //表示有数据读进来了
                     connectionRAII mysqlcon(&request->mysql, m_connPool);
                     request->process();    //读一次解析一次
-                } else                    //如果读完了
-                {
+                } else {                //如果读完了
                     request->improv = 1;
                     request->timer_flag = 1;
                 }
-            } else                        //如果是写事件
-            {
+            } else {                  //如果是写事件
                 if (request->write()) {
-                    request->improv = 1;
-                } else                    //如果写完了
-                {
-                    request->improv = 1;
-                    request->timer_flag = 1;
+                    request->improv = 1;    //表示有写出数据
+                } else {                 //如果写完了
+                    request->improv = 1;    //表示有写出数据
+                    request->timer_flag = 1;    //已经全部写完
                 }
             }
         } else {
+            // proactor模式，子线程不负责IO,因此可直接处理
+            // 即read_once()在主循环完成
             connectionRAII mysqlcon(&request->mysql, m_connPool);
             request->process();
         }

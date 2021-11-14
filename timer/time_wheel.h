@@ -24,31 +24,31 @@
 #include <time.h>
 #include "../log/log.h"
 
-class util_timer;
+class tw_timer;
 
 //连接资源数据
-struct client_data {
+struct _client_data {
     sockaddr_in address;        //地址
-    int sockfd;                    //sock文件描述符
-    util_timer *timer;            //它指向的定时器,指针
+    int sockfd;                 //sock文件描述符
+    tw_timer *timer;            //它指向的定时器,指针
 };
 
 //一个定时器类
 class tw_timer {
 public:
-    tw_timer(int rot, int ts);
+    explicit tw_timer(int time_out);
     ~tw_timer() = default;
 
 private:
-    int rotation;   //记录定时器在时间轮转多少圈后生效
-    int time_slot;  //记录定时器属于时间轮哪个槽
+    int rotation{};   //记录定时器在时间轮转多少圈后生效
+    int time_slot{};  //记录定时器属于时间轮哪个槽
     friend class time_wheel;
 
 public:
-    time_t timeout{};						//超时时间
+    int timeout{};						//超时时间
 
-    void (*cb_func)(client_data *){};    //函数指针，回调函数
-    client_data *user_data{};                //连接的资源
+    void (*cb_func)(_client_data *){};    //函数指针，回调函数
+    _client_data *user_data{};                //连接的资源
     tw_timer *prev;                    //前向指针
     tw_timer *next;                    //后向指针
 };
@@ -83,6 +83,8 @@ public:
      * SI时间到后，调用该函数，时间轮往前滚动一个槽
      */
     void tick();
+
+
 private:
     static const int N = 60;    //时间轮上的槽的数目
     static const int SI = 1;    //每ST时间，时间轮就转动一次

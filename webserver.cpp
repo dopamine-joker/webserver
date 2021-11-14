@@ -1,5 +1,7 @@
 #include "webserver.h"
 
+#include <utility>
+
 WebServer::WebServer() {
     //http_conn类对象
     //创建MAX_FD个http类对象
@@ -14,7 +16,7 @@ WebServer::WebServer() {
     strcat(m_root, root);
 
     //定时器
-    users_timer = new client_data[MAX_FD];
+    users_timer = new _client_data[MAX_FD];
 }
 
 WebServer::~WebServer() {
@@ -30,9 +32,9 @@ WebServer::~WebServer() {
 void WebServer::init(int port, string user, string passWord, string databaseName, int log_write,
                      int opt_linger, int trigmode, int sql_num, int thread_num, int close_log, int actor_model) {
     m_port = port;
-    m_user = user;
-    m_passWord = passWord;
-    m_databaseName = databaseName;
+    m_user = std::move(user);
+    m_passWord = std::move(passWord);
+    m_databaseName = std::move(databaseName);
     m_sql_num = sql_num;
     m_thread_num = thread_num;
     m_log_write = log_write;
@@ -45,23 +47,23 @@ void WebServer::init(int port, string user, string passWord, string databaseName
 void WebServer::trig_mode() {
     //LT + LT
     if (0 == m_TRIGMode) {
-        m_LISTENTrigmode = 0;
-        m_CONNTrigmode = 0;
+        m_LISTENTrigmode = TRIGMODE::LT;
+        m_CONNTrigmode = TRIGMODE::LT;
     }
         //LT + ET
     else if (1 == m_TRIGMode) {
-        m_LISTENTrigmode = 0;
-        m_CONNTrigmode = 1;
+        m_LISTENTrigmode = TRIGMODE::LT;
+        m_CONNTrigmode = TRIGMODE::ET;
     }
         //ET + LT
     else if (2 == m_TRIGMode) {
-        m_LISTENTrigmode = 1;
-        m_CONNTrigmode = 0;
+        m_LISTENTrigmode = TRIGMODE::ET;
+        m_CONNTrigmode = TRIGMODE::LT;
     }
         //ET + ET
     else if (3 == m_TRIGMode) {
-        m_LISTENTrigmode = 1;
-        m_CONNTrigmode = 1;
+        m_LISTENTrigmode = TRIGMODE::ET;
+        m_CONNTrigmode = TRIGMODE::ET;
     }
 }
 
@@ -96,16 +98,19 @@ void WebServer::eventListen() {
     assert(m_listenfd >= 0);
 
     //优雅关闭连接
+    //SO_LINGER 设置close()的关闭行为，优雅关闭则是等待残留在socket缓存区的数据待系统发出后再等待被确认
     if (0 == m_OPT_LINGER) {
+        //第一个参数=0,则第二个值被忽略
         struct linger tmp = {0, 1};
         setsockopt(m_listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
     } else if (1 == m_OPT_LINGER) {
+        //第一个参数=1,则第二个参数不被忽略
         struct linger tmp = {1, 1};
         setsockopt(m_listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
     }
 
     int ret = 0;
-    struct sockaddr_in address;
+    struct sockaddr_in address{};
     bzero(&address, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -120,7 +125,7 @@ void WebServer::eventListen() {
     ret = listen(m_listenfd, 5);
     assert(ret >= 0);
 
-    utils.init(TIMESLOT);
+    utils.init(ALARMTIME);
 
     //epoll创建内核事件表
     epoll_event events[MAX_EVENT_NUMBER];
@@ -161,38 +166,38 @@ void WebServer::timer(int connfd, struct sockaddr_in client_address) {
     //创建定时器，设置回调函数和超时时间，绑定用户数据，将定时器添加到链表中
     users_timer[connfd].address = client_address;
     users_timer[connfd].sockfd = connfd;
-    util_timer *timer = new util_timer;
+    tw_timer *timer = new tw_timer(TIMESLOT);
     timer->user_data = &users_timer[connfd];
     timer->cb_func = cb_func;
-    time_t cur = time(NULL);
-    timer->expire = cur + 3 * TIMESLOT;
+//    time_t cur = time(NULL);
+//    timer->expire = cur + 3 * TIMESLOT;
+
     users_timer[connfd].timer = timer;
-    utils.m_timer_lst.add_timer(timer);
+    utils.m_time_wheel.add_timer(timer);
 }
 
 //若有数据传输，则将定时器往后延迟3个单位
 //并对新的定时器在链表上的位置进行调整
-void WebServer::adjust_timer(util_timer *timer) {
-    time_t cur = time(nullptr);    //返回的是秒数
-    timer->expire = cur + 3 * TIMESLOT;
-    utils.m_timer_lst.adjust_timer(timer);
+void WebServer::adjust_timer(tw_timer *timer) {
+//    time_t cur = time(nullptr);    //返回的是秒数
+//    timer->expire = cur + 3 * TIMESLOT;
+    timer->timeout = 3 * TIMESLOT;
+    utils.m_time_wheel.adjust_timer(timer);
 
     LOG_INFO("%s", "adjust timer once");
 }
 
-void WebServer::deal_timer(util_timer *timer, int sockfd) {
+void WebServer::deal_timer(tw_timer *timer, int sockfd) {
     timer->cb_func(&users_timer[sockfd]);
-    if (timer) {
-        utils.m_timer_lst.del_timer(timer);
-    }
+    utils.m_time_wheel.del_timer(timer);
 
     LOG_INFO("close fd %d", users_timer[sockfd].sockfd);
 }
 
 bool WebServer::dealclinetdata() {
-    struct sockaddr_in client_address;
+    struct sockaddr_in client_address{};
     socklen_t client_addrlength = sizeof(client_address);
-    if (0 == m_LISTENTrigmode) {
+    if (TRIGMODE::LT == m_LISTENTrigmode) {
         int connfd = accept(m_listenfd, (struct sockaddr *) &client_address, &client_addrlength);
         if (connfd < 0) {
             LOG_ERROR("%s:errno is:%d", "accept error", errno);
@@ -205,7 +210,7 @@ bool WebServer::dealclinetdata() {
         }
         timer(connfd, client_address);
     } else {
-        while (1) {
+        while (true) {
             int connfd = accept(m_listenfd, (struct sockaddr *) &client_address, &client_addrlength);
             if (connfd < 0) {
                 LOG_ERROR("%s:errno is:%d", "accept error", errno);
@@ -224,13 +229,10 @@ bool WebServer::dealclinetdata() {
 }
 
 bool WebServer::dealwithsignal(bool &timeout, bool &stop_server) {
-    int ret = 0;
     int sig;
     char signals[1024];
-    ret = recv(m_pipefd[0], signals, sizeof(signals), 0);
-    if (ret == -1) {
-        return false;
-    } else if (ret == 0) {
+    ssize_t ret = recv(m_pipefd[0], signals, sizeof(signals), 0);
+    if (ret == -1 || ret == 0) {
         return false;
     } else {
         for (int i = 0; i < ret; ++i) {
@@ -250,16 +252,16 @@ bool WebServer::dealwithsignal(bool &timeout, bool &stop_server) {
 }
 
 void WebServer::dealwithread(int sockfd) {
-    util_timer *timer = users_timer[sockfd].timer;
+    tw_timer *timer = users_timer[sockfd].timer;
 
     //reactor
-    if (1 == m_actormodel) {
+    if (ACTOR_MODEL::REACTOR == m_actormodel) {
         if (timer) {
             adjust_timer(timer);
         }
 
         //若监测到读事件，将该事件放入请求队列
-        m_pool->append(users + sockfd, 0);
+        m_pool->append(users + sockfd, FD_STATUS::SERVER_READ);
 
         while (true) {
             if (1 == users[sockfd].improv) {
@@ -289,14 +291,15 @@ void WebServer::dealwithread(int sockfd) {
 }
 
 void WebServer::dealwithwrite(int sockfd) {
-    util_timer *timer = users_timer[sockfd].timer;
+    tw_timer *timer = users_timer[sockfd].timer;
     //reactor
-    if (1 == m_actormodel) {
+    if (ACTOR_MODEL::REACTOR == m_actormodel) {
         if (timer) {
             adjust_timer(timer);
         }
 
-        m_pool->append(users + sockfd, 1);
+        // state代表写
+        m_pool->append(users + sockfd, FD_STATUS::SERVER_WRITE);
 
         while (true) {
             if (1 == users[sockfd].improv) {
@@ -345,17 +348,13 @@ void WebServer::eventLoop() {
                     continue;
             } else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                 //服务器端关闭连接，移除对应的定时器
-                util_timer *timer = users_timer[sockfd].timer;
+                tw_timer *timer = users_timer[sockfd].timer;
                 deal_timer(timer, sockfd);
-            }
-                //处理信号
-            else if ((sockfd == m_pipefd[0]) && (events[i].events & EPOLLIN)) {
+            } else if ((sockfd == m_pipefd[0]) && (events[i].events & EPOLLIN)) { //处理信号
                 bool flag = dealwithsignal(timeout, stop_server);
                 if (false == flag)
                     LOG_ERROR("%s", "dealclientdata failure");
-            }
-                //处理客户连接上接收到的数据
-            else if (events[i].events & EPOLLIN) {
+            } else if (events[i].events & EPOLLIN) {//处理客户连接上接收到的数据
                 dealwithread(sockfd);
             } else if (events[i].events & EPOLLOUT) {
                 dealwithwrite(sockfd);
