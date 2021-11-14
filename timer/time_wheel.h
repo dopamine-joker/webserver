@@ -29,7 +29,7 @@ class tw_timer;
 //连接资源数据
 struct _client_data {
     sockaddr_in address;        //地址
-    int sockfd;                    //sock文件描述符
+    int sockfd;                 //sock文件描述符
     tw_timer *timer;            //它指向的定时器,指针
 };
 

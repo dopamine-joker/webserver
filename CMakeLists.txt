@@ -8,6 +8,7 @@ set(WEB_SERVER_SRC
         CGImysql/sql_connection_pool.h CGImysql/sql_connection_pool.cpp
         http/http_conn.h http/http_conn.cpp
         lock/locker.h
+        log/log.h log/log.cpp log/block_queue.h
         threadpool/threadpool.h
-        timer/lst_timer.h timer/lst_timer.cpp timer/time_wheel.h timer/time_wheel.cpp)
+        timer/lst_timer.h timer/lst_timer.cpp timer/time_wheel.h timer/time_wheel.cpp misc/type.h)
 add_executable(main.cpp ${WEB_SERVER_SRC})

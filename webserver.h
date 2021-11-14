@@ -14,6 +14,7 @@
 
 #include "./threadpool/threadpool.h"
 #include "./http/http_conn.h"
+#include "./misc/type.h"
 
 const int MAX_FD = 65536;           //最大文件描述符
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
@@ -71,10 +72,10 @@ public:
     epoll_event events[MAX_EVENT_NUMBER];
 
     int m_listenfd;
-    int m_OPT_LINGER;
-    int m_TRIGMode;
-    int m_LISTENTrigmode;
-    int m_CONNTrigmode;
+    int m_OPT_LINGER;       //优雅关闭连接
+    int m_TRIGMode;         //server 启动传参制定的ET,LT模式
+    int m_LISTENTrigmode;   //listen ET还是LT
+    int m_CONNTrigmode;     //处理的fd ET还是LT
 
     //定时器相关
 //    client_data *users_timer;
